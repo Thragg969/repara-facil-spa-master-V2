@@ -1,20 +1,30 @@
 import api from "./api";
 
-export async function getTecnicos() {
+// Obtener todos los técnicos
+export const getTecnicos = async () => {
   const response = await api.get("/tecnicos");
   return response.data;
-}
+};
 
-export async function getTecnicoById(id) {
+// Obtener un técnico por ID
+export const getTecnicoById = async (id) => {
   const response = await api.get(`/tecnicos/${id}`);
   return response.data;
-}
+};
 
-export async function createTecnico(tecnico) {
-  const response = await api.post("/tecnicos", tecnico);
+// Crear Técnico
+export const createTecnico = async (tecnicoData) => {
+  const response = await api.post("/tecnicos", tecnicoData);
   return response.data;
-}
+};
 
-export async function deleteTecnico(id) {
+// Actualizar técnico
+export const updateTecnico = async (id, tecnicoData) => {
+  const response = await api.put(`/tecnicos/${id}`, tecnicoData);
+  return response.data;
+};
+
+// --- ESTA ES LA FUNCIÓN QUE TE FALTA ---
+export const deleteTecnico = async (id) => {
   await api.delete(`/tecnicos/${id}`);
-}
+};
