@@ -2,16 +2,20 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { getAgenda, createAgenda, updateAgenda, cancelarAgenda } from "../api/agendaService";
 import { getTecnicos } from "../api/tecnicosService";
-import { getClientes } from "../api/clientesService"; // Importante para crear servicio
+import { getClientes } from "../api/clientesService"; 
 import { Modal, Button, Form, Row, Col } from "react-bootstrap";
+import { useAuth } from "../context/AuthContext"; 
 
 export default function Agenda() {
+  const { username, role } = useAuth(); 
+  
   const [citas, setCitas] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
   const [clientes, setClientes] = useState([]);
+  const [myTechId, setMyTechId] = useState(null); 
   
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState('list'); // 'grid' | 'list'
+  const [viewMode, setViewMode] = useState('list'); 
   const [params] = useSearchParams();
   const techIdFilter = params.get("tech");
 
@@ -20,7 +24,6 @@ export default function Agenda() {
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState(null);
 
-  // Formulario
   const initialFormState = {
     fechaInicio: "",
     fechaFin: "",
@@ -31,9 +34,11 @@ export default function Agenda() {
   };
   const [formData, setFormData] = useState(initialFormState);
 
+  const isTecnico = role === "TECNICO" || role === "ROLE_TECNICO";
+
   useEffect(() => {
     cargarDatos();
-  }, []);
+  }, [username, isTecnico]); 
 
   const cargarDatos = async () => {
     setLoading(true);
@@ -43,6 +48,13 @@ export default function Agenda() {
         getTecnicos(),
         getClientes()
       ]);
+
+      if (isTecnico) {
+        const me = tecnicosRes.find(t => t.email?.trim().toLowerCase() === username?.trim().toLowerCase());
+        if (me) {
+            setMyTechId(me.id);
+        }
+      }
 
       const citasFormateadas = agendaRes.data.map(item => ({
         id: item.id,
@@ -70,10 +82,12 @@ export default function Agenda() {
     }
   };
 
-  // --- Manejo del Modal ---
   const handleOpenCreate = () => {
     setEditId(null);
-    setFormData(initialFormState);
+    setFormData({
+        ...initialFormState,
+        tecnicoId: isTecnico && myTechId ? myTechId : "" 
+    });
     setShowModal(true);
   };
 
@@ -123,7 +137,6 @@ export default function Agenda() {
         await updateAgenda(editId, payload);
         alert("¡Cita actualizada!");
       } else {
-        // CREACIÓN: Crea servicio y cita "de una"
         payload.servicio = {
             descripcionProblema: formData.descripcionProblema,
             estado: "ASIGNADO",
@@ -146,20 +159,26 @@ export default function Agenda() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm("¿Eliminar esta cita?")) {
+    // Cambio de texto: Eliminar -> Cancelar
+    if (window.confirm("¿Estás seguro de cancelar esta cita?")) {
       try {
         await cancelarAgenda(id); 
         cargarDatos();
       } catch (error) {
-        alert("Error al eliminar.");
+        alert("Error al cancelar la cita.");
       }
     }
   };
 
   const citasFiltradas = useMemo(() => {
-    if (!techIdFilter) return citas;
-    return citas.filter((c) => String(c.tecnicoId) === String(techIdFilter));
-  }, [citas, techIdFilter]);
+    if (isTecnico && myTechId) {
+        return citas.filter((c) => String(c.tecnicoId) === String(myTechId));
+    }
+    if (techIdFilter) {
+        return citas.filter((c) => String(c.tecnicoId) === String(techIdFilter));
+    }
+    return citas;
+  }, [citas, techIdFilter, isTecnico, myTechId]);
 
   if (loading) return <div className="text-center py-5">Cargando agenda...</div>;
 
@@ -171,7 +190,9 @@ export default function Agenda() {
         <div className="d-flex flex-column flex-md-row justify-content-between align-items-center mb-5 gap-3">
           <div>
             <h2 className="fw-bold text-dark mb-0">Agenda de Servicios</h2>
-            <p className="text-muted small mb-0">Crea y asigna servicios inmediatamente</p>
+            <p className="text-muted small mb-0">
+               {isTecnico ? "Mis asignaciones y citas" : "Gestión global de servicios"}
+            </p>
           </div>
 
           <div className="d-flex gap-2">
@@ -207,13 +228,13 @@ export default function Agenda() {
                         <div className="small text-secondary d-flex flex-column gap-2">
                           <div><strong>Cliente:</strong> {c.cliente}</div>
                           <div><strong>Servicio:</strong> {c.servicioDesc}</div>
-                          <div><strong>Técnico:</strong> {c.tecnicoNombre}</div>
+                          {!isTecnico && <div><strong>Técnico:</strong> {c.tecnicoNombre}</div>}
                           <div><i className="bi bi-geo-alt me-1"></i> {c.direccion}</div>
                         </div>
                       </div>
                       <div className="card-footer bg-white border-top-0 d-flex gap-2">
-                        <Button variant="outline-primary" size="sm" className="flex-grow-1" onClick={() => handleOpenEdit(c)}>Editar</Button>
-                        <Button variant="outline-danger" size="sm" className="flex-grow-1" onClick={() => handleDelete(c.id)}>Eliminar</Button>
+                        <Button variant="outline-primary" size="sm" className="flex-grow-1" onClick={() => handleOpenEdit(c)}>Gestionar</Button>
+                        <Button variant="outline-danger" size="sm" className="flex-grow-1" onClick={() => handleDelete(c.id)}>Cancelar</Button>
                       </div>
                     </div>
                   </div>
@@ -221,7 +242,7 @@ export default function Agenda() {
               </div>
             )}
 
-            {/* LISTA CON BOTONES GRANDES Y TEXTO */}
+            {/* LISTA (BOTONES GRANDES Y VISIBLES) */}
             {viewMode === 'list' && (
               <div className="card shadow border-0 overflow-hidden">
                 <div className="table-responsive">
@@ -231,7 +252,7 @@ export default function Agenda() {
                         <th className="ps-4">Fecha</th>
                         <th>Cliente</th>
                         <th>Servicio</th>
-                        <th>Técnico</th>
+                        {!isTecnico && <th>Técnico</th>}
                         <th>Estado</th>
                         <th className="text-end pe-4">Acciones</th>
                       </tr>
@@ -247,16 +268,17 @@ export default function Agenda() {
                             </div>
                           </td>
                           <td className="small">{c.servicioDesc}</td>
-                          <td className="small">{c.tecnicoNombre}</td>
+                          {!isTecnico && <td className="small">{c.tecnicoNombre}</td>}
                           <td><span className="badge bg-light text-dark border">{c.estado}</span></td>
                           <td className="text-end pe-4">
+                            {/* BOTONES MEJORADOS: MÁS GRANDES Y CON TEXTO */}
                             <div className="d-flex justify-content-end gap-2">
-                                {/* BOTONES CON TEXTO Y TAMAÑO NORMAL (No 'sm') */}
-                                <Button variant="primary" className="d-flex align-items-center px-3" onClick={() => handleOpenEdit(c)}>
+                                <Button variant="warning" className="text-dark fw-bold px-3 shadow-sm" onClick={() => handleOpenEdit(c)}>
                                     <i className="bi bi-pencil-square me-2"></i> Editar
                                 </Button>
-                                <Button variant="danger" className="d-flex align-items-center px-3" onClick={() => handleDelete(c.id)}>
-                                    <i className="bi bi-trash me-2"></i> Eliminar
+                                {/* Botón visible para todos (incluido técnicos) */}
+                                <Button variant="danger" className="fw-bold px-3 shadow-sm" onClick={() => handleDelete(c.id)}>
+                                    <i className="bi bi-x-circle me-2"></i> Cancelar
                                 </Button>
                             </div>
                           </td>
@@ -274,7 +296,7 @@ export default function Agenda() {
         <Modal show={showModal} onHide={() => setShowModal(false)} centered backdrop="static" size="lg">
           <Modal.Header closeButton className="bg-light">
             <Modal.Title className="fw-bold">
-              {editId ? "✏️ Editar Cita" : "📅 Crear Servicio y Agendar"}
+              {editId ? "✏️ Gestionar Cita" : "📅 Crear Servicio y Agendar"}
             </Modal.Title>
           </Modal.Header>
           <Modal.Body className="p-4">
@@ -308,7 +330,13 @@ export default function Agenda() {
 
                 <Col md={12}>
                   <Form.Label className="small fw-bold">Técnico Asignado</Form.Label>
-                  <Form.Select name="tecnicoId" value={formData.tecnicoId} onChange={handleInputChange}>
+                  <Form.Select 
+                    name="tecnicoId" 
+                    value={formData.tecnicoId} 
+                    onChange={handleInputChange}
+                    disabled={isTecnico} // BLOQUEAR si es técnico
+                    className={isTecnico ? "bg-secondary-subtle" : ""}
+                  >
                     <option value="">-- Selecciona Técnico --</option>
                     {tecnicos.map(t => (
                       <option key={t.id} value={t.id}>{t.nombre} {t.apellido} - {t.especialidad}</option>

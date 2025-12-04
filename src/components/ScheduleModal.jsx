@@ -18,13 +18,16 @@ export default function ScheduleModal({ show, onClose, service, onSuccess }) {
   const [fechaInicio, setFechaInicio] = useState(""); 
   const [loading, setLoading] = useState(false);
 
+  // Helpers de roles
   const esCliente = role === "CLIENTE" || role === "ROLE_CLIENTE";
+  const esTecnico = role === "TECNICO" || role === "ROLE_TECNICO";
 
   useEffect(() => {
     if (show) {
       if (service) setDescripcion(`Solicitud de: ${service.nombre}`);
       setFechaInicio(""); 
 
+      // 1. Cargar Clientes
       getClientes().then((data) => {
         setClientes(data);
         if (esCliente) {
@@ -33,11 +36,21 @@ export default function ScheduleModal({ show, onClose, service, onSuccess }) {
         }
       }).catch(console.error);
 
+      // 2. Cargar Técnicos y Auto-asignar si soy técnico
       getTecnicos().then((data) => {
-        setTecnicos(data.filter(t => t.disponible)); 
+        const disponibles = data.filter(t => t.disponible);
+        setTecnicos(disponibles);
+
+        if (esTecnico) {
+            // Buscar mi ID de técnico usando el email de la sesión
+            const miPerfilTecnico = data.find(t => t.email === username);
+            if (miPerfilTecnico) {
+                setTecnicoId(miPerfilTecnico.id);
+            }
+        }
       }).catch(console.error);
     }
-  }, [show, service, username, esCliente]);
+  }, [show, service, username, esCliente, esTecnico]);
 
   const handleSave = async () => {
     if (!clienteId || !descripcion) {
@@ -48,17 +61,10 @@ export default function ScheduleModal({ show, onClose, service, onSuccess }) {
     setLoading(true);
     try {
       if (fechaInicio) {
-        // --- CREAR AGENDA (Cita) ---
-        // TRUCO: datetime-local devuelve "YYYY-MM-DDTHH:mm".
-        // LocalDateTime espera "YYYY-MM-DDTHH:mm:ss".
-        // Solo agregamos ":00" al final. NO USAR toISOString() para evitar conflictos de zona horaria.
         const fechaInicioEnvio = fechaInicio + ":00"; 
-        
-        // Calcular fecha fin manualmente (2 horas despues) manteniendo formato local
         const d = new Date(fechaInicio);
         d.setHours(d.getHours() + 2);
         
-        // Función helper para formatear a YYYY-MM-DDTHH:mm:ss
         const pad = (n) => n.toString().padStart(2, '0');
         const fechaFinEnvio = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00`;
 
@@ -75,12 +81,10 @@ export default function ScheduleModal({ show, onClose, service, onSuccess }) {
             }
         };
         
-        console.log("Enviando Agenda:", payloadAgenda);
         await createAgenda(payloadAgenda);
         alert("¡Cita agendada exitosamente!");
 
       } else {
-        // --- CREAR SOLICITUD DE SERVICIO (Sin fecha) ---
         const payloadServicio = {
             descripcionProblema: descripcion,
             estado: "PENDIENTE",
@@ -88,7 +92,6 @@ export default function ScheduleModal({ show, onClose, service, onSuccess }) {
             tecnico: tecnicoId ? { id: parseInt(tecnicoId) } : null
         };
         
-        console.log("Enviando Servicio:", payloadServicio);
         await createServicio(payloadServicio);
         alert("¡Solicitud enviada! Un técnico te contactará.");
       }
@@ -117,20 +120,21 @@ export default function ScheduleModal({ show, onClose, service, onSuccess }) {
       <Modal.Body className="p-4">
         <Form>
           <Row className="g-3">
+            {/* Si es cliente, no ve el select de clientes (se auto-asigna) */}
             {!esCliente && (
               <Col md={12}>
-                <Form.Label className="fw-bold">Cliente</Form.Label>
+                <Form.Label className="fw-bold">Cliente <span className="text-danger">*</span></Form.Label>
                 <Form.Select value={clienteId} onChange={(e) => setClienteId(e.target.value)}>
                   <option value="">-- Selecciona --</option>
                   {clientes.map((c) => (
-                    <option key={c.id} value={c.id}>{c.nombre} {c.apellido}</option>
+                    <option key={c.id} value={c.id}>{c.nombre} {c.apellido} ({c.email})</option>
                   ))}
                 </Form.Select>
               </Col>
             )}
 
             <Col md={12}>
-              <Form.Label className="fw-bold">Detalle del Problema</Form.Label>
+              <Form.Label className="fw-bold">Detalle del Problema <span className="text-danger">*</span></Form.Label>
               <Form.Control 
                 as="textarea" 
                 rows={2} 
@@ -157,13 +161,21 @@ export default function ScheduleModal({ show, onClose, service, onSuccess }) {
                             </Form.Text>
                         </Col>
                         <Col md={6}>
-                            <Form.Label className="small fw-bold">Técnico Preferido</Form.Label>
-                            <Form.Select value={tecnicoId} onChange={(e) => setTecnicoId(e.target.value)}>
+                            <Form.Label className="small fw-bold">Técnico Asignado</Form.Label>
+                            <Form.Select 
+                                value={tecnicoId} 
+                                onChange={(e) => setTecnicoId(e.target.value)}
+                                disabled={esTecnico} // <--- BLOQUEADO PARA TÉCNICOS
+                                className={esTecnico ? "bg-secondary-subtle" : ""}
+                            >
                                 <option value="">-- Cualquiera --</option>
                                 {tecnicos.map((t) => (
-                                <option key={t.id} value={t.id}>{t.nombre} {t.apellido}</option>
+                                <option key={t.id} value={t.id}>
+                                    {t.nombre} {t.apellido}
+                                </option>
                                 ))}
                             </Form.Select>
+                            {esTecnico && <Form.Text className="text-muted">Auto-asignado a ti.</Form.Text>}
                         </Col>
                     </Row>
                 </div>

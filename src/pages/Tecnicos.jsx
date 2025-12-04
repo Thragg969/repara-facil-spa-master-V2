@@ -30,13 +30,15 @@ export default function Tecnicos() {
     descripcion: ""
   });
 
+  // Helpers de Roles
   const isAdmin = role === 'ROLE_ADMIN' || role === 'ADMIN';
+  const isTecnico = role === 'ROLE_TECNICO' || role === 'TECNICO';
 
   const initialFormState = {
     nombre: "",
     apellido: "",
     email: "",
-    password: "", // Campo nuevo
+    password: "", 
     telefono: "",
     especialidad: "General",
     foto: "",
@@ -81,7 +83,7 @@ export default function Tecnicos() {
       nombre: tech.nombre,
       apellido: tech.apellido,
       email: tech.email,
-      password: "", // Resetear password al editar
+      password: "", 
       telefono: tech.telefono,
       especialidad: tech.especialidad,
       foto: tech.foto || "",
@@ -142,6 +144,11 @@ export default function Tecnicos() {
         descripcion: ""
     });
     setShowBookingModal(true);
+  };
+
+  // Acción temporal para el botón de contactar
+  const handleContactar = (tech) => {
+      alert(`Próximamente: Abrir chat con ${tech.nombre} ${tech.apellido}`);
   };
 
   const handleBookingSubmit = async () => {
@@ -215,7 +222,9 @@ export default function Tecnicos() {
           <div>
             <h2 className="fw-bold text-dark mb-0">Personal Técnico</h2>
             <p className="text-muted small mb-0">
-              {isAdmin ? "Administración de personal y asignación de servicios" : "Elige a tu experto de confianza"}
+              {isAdmin ? "Administración de personal y asignación de servicios" : 
+               isTecnico ? "Compañeros de trabajo y red de contactos" : 
+               "Elige a tu experto de confianza"}
             </p>
           </div>
 
@@ -252,6 +261,7 @@ export default function Tecnicos() {
                       {isAdmin && <div className="text-muted small mb-2"><i className="bi bi-envelope"></i> {t.email}</div>}
                     </div>
                     <div className="card-footer bg-white border-top-0 p-3 pt-0">
+                      {/* LÓGICA DE BOTONES SEGÚN ROL */}
                       {isAdmin ? (
                         <div className="d-flex flex-column gap-2">
                             <div className="d-flex gap-2">
@@ -262,7 +272,19 @@ export default function Tecnicos() {
                                 <i className="bi bi-calendar-plus me-1"></i> Asignar a Cliente
                             </Button>
                         </div>
+                      ) : isTecnico ? (
+                        /* VISTA TÉCNICO: Botón Contactar */
+                        <div className="d-grid">
+                          <Button 
+                            variant="info" 
+                            className="text-white"
+                            onClick={() => handleContactar(t)}
+                          >
+                            <i className="bi bi-chat-dots-fill me-2"></i> Contactar
+                          </Button>
+                        </div>
                       ) : (
+                        /* VISTA CLIENTE: Botón Contratar */
                         <div className="d-grid">
                           <Button 
                             variant={t.disponible ? "primary" : "secondary"} 
@@ -315,7 +337,17 @@ export default function Tecnicos() {
                                         <i className="bi bi-calendar-plus-fill me-2"></i> Asignar
                                     </Button>
                                 </div>
+                             ) : isTecnico ? (
+                                /* VISTA TÉCNICO: Botón Contactar */
+                                <Button 
+                                    variant="info"
+                                    className="text-white fw-bold px-3" 
+                                    onClick={() => handleContactar(t)}
+                                >
+                                    <i className="bi bi-chat-dots-fill me-2"></i> Contactar
+                                </Button>
                              ) : (
+                                /* VISTA CLIENTE: Botón Contratar */
                                 <Button 
                                     variant="primary" 
                                     disabled={!t.disponible} 
@@ -334,7 +366,7 @@ export default function Tecnicos() {
           )
         )}
 
-        {/* MODAL GESTIÓN */}
+        {/* MODAL GESTIÓN (SOLO ADMIN) */}
         {isAdmin && (
             <Modal show={showModal} onHide={() => setShowModal(false)} centered>
                 <Modal.Header closeButton><Modal.Title>{editId ? "Editar Técnico" : "Registrar Técnico"}</Modal.Title></Modal.Header>
@@ -370,6 +402,7 @@ export default function Tecnicos() {
             </Modal>
         )}
 
+        {/* MODAL AGENDAR (VISIBLE PARA ADMIN Y CLIENTE) */}
         <Modal show={showBookingModal} onHide={() => setShowBookingModal(false)} centered size="lg">
             <Modal.Header closeButton className="bg-primary text-white">
                 <Modal.Title>📅 Agendar con {bookingData.tecnicoNombre}</Modal.Title>
