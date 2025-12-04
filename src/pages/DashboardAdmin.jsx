@@ -2,14 +2,14 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import api from "../api/api";
-// Importamos los servicios para técnicos
-import { createTecnico, deleteTecnico } from "../api/tecnicosService"; 
+// Importamos TODOS los servicios necesarios para técnicos
+import { createTecnico, deleteTecnico, getTecnicos } from "../api/tecnicosService"; 
 import { Modal, Button, Form, Row, Col } from "react-bootstrap";
 
 export default function DashboardAdmin() {
   const { username } = useAuth();
   
-  // 1. Estado para ESTADÍSTICAS (Lo que ya tenías)
+  // 1. Estado para ESTADÍSTICAS
   const [stats, setStats] = useState({
     totalClientes: 0,
     totalTecnicos: 0,
@@ -17,7 +17,7 @@ export default function DashboardAdmin() {
     totalGarantias: 0
   });
 
-  // 2. Estado para la TABLA DE TÉCNICOS (Lo nuevo)
+  // 2. Estado para la TABLA DE TÉCNICOS
   const [tecnicosLista, setTecnicosLista] = useState([]);
   
   // Estados generales y de UI
@@ -32,7 +32,7 @@ export default function DashboardAdmin() {
     email: "",
     telefono: "",
     especialidad: "General",
-    foto: "https://via.placeholder.com/150",
+    foto: "", // Dejar vacío por defecto para que tome el placeholder si no se llena
     disponible: true
   };
   const [formData, setFormData] = useState(initialFormState);
@@ -46,10 +46,12 @@ export default function DashboardAdmin() {
     try {
       setLoading(true);
       
-      // Hacemos todas las peticiones en paralelo para que sea rápido
-      const [clientesResp, tecnicosResp, serviciosResp, garantiasResp] = await Promise.all([
+      // Hacemos todas las peticiones en paralelo
+      // Nota: getTecnicos() devuelve el array directo (response.data), 
+      // mientras que api.get devuelve el objeto respuesta completo de axios.
+      const [clientesResp, listaTecnicos, serviciosResp, garantiasResp] = await Promise.all([
         api.get("/clientes"),
-        api.get("/tecnicos"), // Aquí obtenemos la lista completa
+        getTecnicos(), // Usamos el servicio aquí
         api.get("/servicios"),
         api.get("/garantias")
       ]);
@@ -57,13 +59,13 @@ export default function DashboardAdmin() {
       // 1. Actualizamos Estadísticas
       setStats({
         totalClientes: clientesResp.data.length,
-        totalTecnicos: tecnicosResp.data.length, // Se actualiza solo
+        totalTecnicos: listaTecnicos.length, // listaTecnicos es el array directo
         totalServicios: serviciosResp.data.length,
         totalGarantias: garantiasResp.data.length
       });
 
       // 2. Actualizamos la Tabla de Técnicos
-      setTecnicosLista(tecnicosResp.data);
+      setTecnicosLista(listaTecnicos);
 
     } catch (error) {
       console.error("Error cargando el dashboard:", error);
@@ -86,9 +88,15 @@ export default function DashboardAdmin() {
 
     setSaving(true);
     try {
-      await createTecnico(formData); // Guardamos en BD
+      // Si la foto está vacía, enviamos null o una cadena vacía (el backend o el frontend manejarán el default)
+      const payload = {
+        ...formData,
+        foto: formData.foto.trim() === "" ? null : formData.foto
+      };
+
+      await createTecnico(payload); // Guardamos en BD
       
-      // RECARGA AUTOMÁTICA: Actualiza tabla y contadores
+      // RECARGA AUTOMÁTICA
       await cargarDatosGenerales(); 
       
       setShowModal(false);
@@ -137,7 +145,7 @@ export default function DashboardAdmin() {
         </Button>
       </div>
 
-      {/* --- SECCIÓN 1: TARJETAS DE ESTADÍSTICAS (Lo que ya tenías) --- */}
+      {/* --- SECCIÓN 1: TARJETAS DE ESTADÍSTICAS --- */}
       <div className="row mb-5">
         <div className="col-md-3">
           <div className="card text-white bg-primary mb-3 shadow-sm h-100">
@@ -177,7 +185,7 @@ export default function DashboardAdmin() {
         </div>
       </div>
 
-      {/* --- SECCIÓN 2: TABLA DE GESTIÓN DE TÉCNICOS (Lo nuevo) --- */}
+      {/* --- SECCIÓN 2: TABLA DE GESTIÓN DE TÉCNICOS --- */}
       <div className="card shadow-sm border-0">
         <div className="card-header bg-white py-3 border-bottom">
           <h5 className="mb-0 fw-bold text-dark">👨‍🔧 Lista de Técnicos</h5>
@@ -206,6 +214,7 @@ export default function DashboardAdmin() {
                           alt="Avatar" 
                           className="rounded-circle me-3 border"
                           style={{ width: "40px", height: "40px", objectFit: "cover" }}
+                          onError={(e) => { e.target.src = "https://via.placeholder.com/40"; }} // Fallback si la url está rota
                         />
                         <div>
                           <div className="fw-bold">{tech.nombre} {tech.apellido}</div>
@@ -303,6 +312,9 @@ export default function DashboardAdmin() {
                   type="text" name="foto" placeholder="https://..."
                   value={formData.foto} onChange={handleInputChange} 
                 />
+                <Form.Text className="text-muted">
+                  Pega el enlace de una imagen (jpg/png) para el perfil.
+                </Form.Text>
               </Col>
             </Row>
           </Form>
