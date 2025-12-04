@@ -1,10 +1,9 @@
-// src/context/AuthContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 import api from "../api/api";
 
 const AuthContext = createContext(null);
 
-// Función para decodificar JWT y extraer el payload
+// Función para decodificar JWT
 const decodeToken = (token) => {
   try {
     const base64Url = token.split('.')[1];
@@ -25,58 +24,59 @@ const decodeToken = (token) => {
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
   const [username, setUsername] = useState(null);
-  const [role, setRole] = useState(null); // ROL del usuario
+  const [role, setRole] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem("token");
-      const storedUser = localStorage.getItem("username");
-      const storedRole = localStorage.getItem("role");
-      
-      if (storedToken) {
-        console.log("✅ AuthContext: Token encontrado, restaurando sesión.");
-        setToken(storedToken);
-        setUsername(storedUser);
-        setRole(storedRole);
+    const initAuth = () => {
+      try {
+        const storedToken = localStorage.getItem("token");
+        const storedUser = localStorage.getItem("username");
+        let storedRole = localStorage.getItem("role");
         
-        // Verificar si el token sigue válido (opcional)
-        const decoded = decodeToken(storedToken);
-        if (decoded && decoded.exp * 1000 < Date.now()) {
-          console.warn("⚠️ Token expirado, limpiando sesión");
-          localStorage.clear();
-          setToken(null);
-          setUsername(null);
-          setRole(null);
+        if (storedToken) {
+          // Validar integridad básica del token
+          const decoded = decodeToken(storedToken);
+          
+          // Si hay token pero no hay rol guardado (común en Registro), lo extraemos
+          if (!storedRole && decoded) {
+            storedRole = decoded.role || decoded.authorities?.[0] || "ROLE_CLIENTE";
+            localStorage.setItem("role", storedRole); // Guardar para la próxima
+            console.log("⚠️ Rol recuperado del token:", storedRole);
+          }
+
+          if (decoded && decoded.exp * 1000 < Date.now()) {
+            console.warn("⚠️ Token expirado, cerrando sesión");
+            logout();
+          } else {
+            setToken(storedToken);
+            setUsername(storedUser);
+            setRole(storedRole);
+          }
         }
-      } else {
-        console.log("ℹ️ AuthContext: No hay token guardado.");
+      } catch (error) {
+        console.error("❌ Error inicializando sesión:", error);
+        logout();
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("❌ Error leyendo localStorage:", error);
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    initAuth();
   }, []);
 
   const login = async (userOrEmail, password) => {
     try {
-      console.log("Attempting login for:", userOrEmail);
       const resp = await api.post("/auth/login", { 
         username: userOrEmail, 
         password: password 
       });
       
       const { token } = resp.data;
-      if (!token) throw new Error("No se recibió token del servidor");
+      if (!token) throw new Error("No se recibió token");
 
-      // Decodificar token para extraer el rol
       const decoded = decodeToken(token);
-      console.log("Token decodificado:", decoded);
-      
-      // El JWT contiene el rol en el claim "role" o "authorities"
-      // Ajusta según lo que devuelva tu backend
-      const userRole = decoded.role || decoded.authorities?.[0] || "CLIENTE";
+      const userRole = decoded.role || decoded.authorities?.[0] || "ROLE_CLIENTE";
       
       setToken(token);
       setUsername(userOrEmail);
@@ -86,8 +86,6 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem("username", userOrEmail);
       localStorage.setItem("role", userRole);
       
-      console.log("✅ Login exitoso. Rol:", userRole);
-      
       return true;
     } catch (error) {
       console.error("❌ Error en login:", error);
@@ -96,14 +94,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    console.log("🔒 Cerrando sesión...");
     setToken(null);
     setUsername(null);
     setRole(null);
-    localStorage.removeItem("token");
-    localStorage.removeItem("username");
-    localStorage.removeItem("role");
-    localStorage.removeItem("usuario");
+    localStorage.clear();
   };
 
   const value = {
@@ -111,9 +105,10 @@ export const AuthProvider = ({ children }) => {
     username,
     role,
     isAuthenticated: !!token,
+    // Helpers booleanos para facilitar la lógica en los componentes
     isAdmin: role === "ADMIN" || role === "ROLE_ADMIN",
     isTecnico: role === "TECNICO" || role === "ROLE_TECNICO",
-    isCliente: role === "CLIENTE" || role === "ROLE_CLIENTE",
+    isCliente: role === "CLIENTE" || role === "ROLE_CLIENTE", 
     login,
     logout,
     loading,
@@ -125,7 +120,7 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("❌ useAuth debe usarse dentro de un <AuthProvider>");
+    throw new Error("useAuth debe usarse dentro de un <AuthProvider>");
   }
   return context;
 };

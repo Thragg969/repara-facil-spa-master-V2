@@ -9,7 +9,7 @@ export default function ServiceCard({ service }) {
   return (
     <div className="card h-100 shadow-sm service-card border-0">
       <div className="card-body d-flex flex-column">
-        {/* Encabezado de la tarjeta */}
+        {/* Encabezado */}
         <div className="d-flex justify-content-between align-items-start mb-3">
           <div>
             <h5 className="card-title fw-bold text-primary mb-1">{service.nombre}</h5>
@@ -31,7 +31,7 @@ export default function ServiceCard({ service }) {
             <i className="bi bi-person-badge me-2"></i> {service.nivel}
           </div>
 
-          {/* BOTÓN AGENDAR REAL */}
+          {/* ÚNICO BOTÓN PARA AGENDAR */}
           <button
             className="btn btn-primary w-100 fw-semibold"
             onClick={() => setShowModal(true)}
@@ -41,14 +41,13 @@ export default function ServiceCard({ service }) {
         </div>
       </div>
 
-      {/* MODAL CONECTADO AL BACKEND */}
+      {/* El modal se encarga de mostrar los técnicos */}
       <ScheduleModal
         show={showModal}
         onClose={() => setShowModal(false)}
         service={service}
         onSuccess={() => {
-            // Opcional: Redirigir a la agenda o mostrar mensaje
-            // window.location.href = "/agenda"; 
+             // Lógica extra si se requiere
         }}
       />
     </div>
